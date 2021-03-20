@@ -123,7 +123,7 @@ func TestPostgres(t *testing.T) {
 	}
 
 	if count != 1 {
-		t.Errorf("Invalid count, expected 0, found: %d", count)
+		t.Errorf("Invalid count, expected 1, found: %d", count)
 		return
 	}
 }
