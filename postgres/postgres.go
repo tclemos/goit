@@ -33,21 +33,15 @@ type Params struct {
 
 // Container metadata to load a container for postgres database
 type Container struct {
-	name   string
 	params Params
+	url    url.URL
 }
 
 // NewContainer creates a new instance of Container
-func NewContainer(n string, p Params) *Container {
+func NewContainer(p Params) *Container {
 	return &Container{
-		name:   n,
 		params: p,
 	}
-}
-
-// Name of the container
-func (c *Container) Name() string {
-	return c.name
 }
 
 // Options to start a postgres container accordingly to the params
@@ -62,7 +56,6 @@ func (c *Container) Options() (*dockertest.RunOptions, error) {
 	}
 
 	return &dockertest.RunOptions{
-		Name:       c.name,
 		Repository: "postgres",
 		Tag:        "13.2-alpine",
 		Env: []string{
@@ -78,15 +71,19 @@ func (c *Container) Options() (*dockertest.RunOptions, error) {
 // AfterStart will check the connection and execute migrations
 func (c *Container) AfterStart(ctx context.Context, r *dockertest.Resource) error {
 	// db url
-	url := c.createDBURL(r)
+	c.url = c.createDBURL(r)
 
 	// check db connection
-	err := checkDb(ctx, url)
+	err := c.checkDb(ctx)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (c *Container) Url() url.URL {
+	return c.url
 }
 
 func (c *Container) createDBURL(container *dockertest.Resource) url.URL {
@@ -109,8 +106,8 @@ func (c *Container) createDBURL(container *dockertest.Resource) url.URL {
 	return dbURL
 }
 
-func checkDb(ctx context.Context, dbURL url.URL) error {
-	log.Logf("checking postgres connection at %s", dbURL.String())
+func (c *Container) checkDb(ctx context.Context) error {
+	log.Logf("checking postgres connection at %s", c.url.String())
 	// prepare a connection verification interval. Use a Fibonacci backoff
 	// instead of exponential so wait times scale appropriately.
 	b, err := retry.NewFibonacci(500 * time.Millisecond)
@@ -124,7 +121,7 @@ func checkDb(ctx context.Context, dbURL url.URL) error {
 
 	// Establish a connection to the database.
 	err = retry.Do(ctx, b, func(ctx context.Context) error {
-		_, err := pgxpool.Connect(ctx, dbURL.String())
+		_, err := pgxpool.Connect(ctx, c.url.String())
 		if err != nil {
 			log.Log("waiting on postgres server to be available")
 			return retry.RetryableError(err)
@@ -136,6 +133,6 @@ func checkDb(ctx context.Context, dbURL url.URL) error {
 		return err
 	}
 
-	log.Logf("postgres available at: %s", dbURL.String())
+	log.Logf("postgres available at: %s", c.url.String())
 	return nil
 }

@@ -2,6 +2,7 @@ package goit
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ory/dockertest/v3"
 	"github.com/tclemos/goit/log"
@@ -33,9 +34,9 @@ func Start(containers ...Container) {
 		r, err := startContainer(Ctx, pool, o)
 		handleContainerErr(err, "can't start container")
 
-		log.Log("executing AfterStart")
+		log.Logf("executing AfterStart for container: %s", r.Container.Name)
 		err = c.AfterStart(Ctx, r)
-		handleContainerErr(err, "failed to execute AfterStarted")
+		handleContainerErr(err, fmt.Sprintf("failed to execute AfterStarted for container: %s", r.Container.Name))
 
 		resources = append(resources, r)
 	}

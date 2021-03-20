@@ -22,9 +22,6 @@ type Container interface {
 	// Executed after the container is started, use it to run migrations
 	// copy files, etc
 	AfterStart(context.Context, *dockertest.Resource) error
-
-	// Name returns the container name
-	Name() string
 }
 
 // startContainer creates and initializes a container accordingly to the provided options

@@ -1,4 +1,4 @@
-package localstack
+package aws
 
 import (
 	"context"
@@ -27,29 +27,23 @@ type SqsQueue struct {
 	Name string
 }
 
-// Params needed to start a postgres container
+// Params needed to start a aws container
 type Params struct {
 	Region    string
+	Port      int
 	SqsQueues []SqsQueue
 }
 
-// Container metadata to load a container for postgres database
+// Container metadata to load a container for aws environment
 type Container struct {
-	name   string
 	params Params
 }
 
 // NewContainer creates a new instance of Container
-func NewContainer(n string, p Params) *Container {
+func NewContainer(p Params) *Container {
 	return &Container{
-		name:   n,
 		params: p,
 	}
-}
-
-// Name of the container
-func (c *Container) Name() string {
-	return c.name
 }
 
 // Options to start a localstack container accordingly to the params
@@ -58,7 +52,6 @@ func (c *Container) Options() (*dockertest.RunOptions, error) {
 	pb[docker.Port(fmt.Sprintf("%d/tcp", edgePort))] = []docker.PortBinding{{HostIP: "0.0.0.0", HostPort: strconv.Itoa(edgePort)}}
 
 	return &dockertest.RunOptions{
-		Name:       c.name,
 		Repository: "localstack/localstack",
 		Tag:        "latest",
 		Env: []string{
@@ -69,7 +62,7 @@ func (c *Container) Options() (*dockertest.RunOptions, error) {
 	}, nil
 }
 
-// AfterStart will check the connection and execute migrations
+// AfterStart will wait until the container is ready to be consumed
 func (c *Container) AfterStart(ctx context.Context, r *dockertest.Resource) error {
 
 	// sets the endpoint to aws config
@@ -150,4 +143,15 @@ func (c *Container) awaitInitialization(ctx context.Context, svc *sqs.SQS) error
 	}
 
 	return nil
+}
+
+func CreateConfig(port int, region string) *aws.Config {
+	return aws.NewConfig().
+		WithEndpoint(fmt.Sprintf("http://localhost:%d", port)).
+		WithCredentialsChainVerboseErrors(true).
+		WithHTTPClient(&http.Client{Timeout: 10 * time.Second}).
+		WithMaxRetries(2).
+		WithCredentials(credentials.NewStaticCredentials("foo", "bar", "")).
+		WithRegion(region).
+		WithDisableSSL(true)
 }
