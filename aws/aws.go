@@ -15,7 +15,6 @@ import (
 	"github.com/ory/dockertest/v3/docker"
 	"github.com/pkg/errors"
 	"github.com/sethvargo/go-retry"
-	"github.com/tclemos/go-dockertest-example/e2e"
 	"github.com/tclemos/goit/log"
 )
 
@@ -36,7 +35,8 @@ type Params struct {
 
 // Container metadata to load a container for aws environment
 type Container struct {
-	params Params
+	params     Params
+	SqsService *SqsService
 }
 
 // NewContainer creates a new instance of Container
@@ -66,23 +66,9 @@ func (c *Container) Options() (*dockertest.RunOptions, error) {
 func (c *Container) AfterStart(ctx context.Context, r *dockertest.Resource) error {
 
 	// sets the endpoint to aws config
-	awsconfig := e2e.GetValue("awsconfig")
-	if awsconfig == nil {
-		awsconfig = aws.NewConfig()
-	}
+	awsconfig := CreateConfig(c.params.Port, c.params.Region)
 
-	awsconfig.(*aws.Config).
-		WithEndpoint(fmt.Sprintf("http://localhost:%d", edgePort)).
-		WithCredentialsChainVerboseErrors(true).
-		WithHTTPClient(&http.Client{Timeout: 10 * time.Second}).
-		WithMaxRetries(2).
-		WithCredentials(credentials.NewStaticCredentials("foo", "bar", "")).
-		WithRegion(c.params.Region).
-		WithDisableSSL(true)
-
-	e2e.AddValue("awsconfig", awsconfig)
-
-	s, err := session.NewSession(awsconfig.(*aws.Config))
+	s, err := session.NewSession(awsconfig)
 	if err != nil {
 		log.Errorf(err, "failed to create aws session")
 		return err
@@ -102,6 +88,9 @@ func (c *Container) AfterStart(ctx context.Context, r *dockertest.Resource) erro
 			return err
 		}
 	}
+
+	// provide the sqs Service
+	c.SqsService = newSqsService(s)
 
 	return nil
 }

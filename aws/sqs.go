@@ -15,7 +15,7 @@ type SqsService struct {
 	svc *sqs.SQS
 }
 
-func NewSqsService(s *session.Session) *SqsService {
+func newSqsService(s *session.Session) *SqsService {
 	svc := sqs.New(s)
 
 	return &SqsService{

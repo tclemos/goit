@@ -14,10 +14,9 @@ var (
 )
 
 // Start the integration test environment
-func Start(containers ...Container) {
+func Start(ctx context.Context, containers ...Container) {
 	log.Log("initializing containers")
 	resources = []*dockertest.Resource{}
-	Ctx = context.WithValue(context.Background(), valuesKey, map[string]interface{}{})
 
 	var err error
 	pool, err = dockertest.NewPool("")
@@ -31,11 +30,11 @@ func Start(containers ...Container) {
 		log.Log("loading container with options: %v", o)
 		handleContainerErr(err, "can't load container")
 
-		r, err := startContainer(Ctx, pool, o)
+		r, err := startContainer(ctx, pool, o)
 		handleContainerErr(err, "can't start container")
 
 		log.Logf("executing AfterStart for container: %s", r.Container.Name)
-		err = c.AfterStart(Ctx, r)
+		err = c.AfterStart(ctx, r)
 		handleContainerErr(err, fmt.Sprintf("failed to execute AfterStarted for container: %s", r.Container.Name))
 
 		resources = append(resources, r)

@@ -1,4 +1,4 @@
-package examples
+package postgres_test
 
 import (
 	"context"
@@ -22,7 +22,9 @@ var dbUrl url.URL
 
 func TestMain(m *testing.M) {
 
-	// Prepare postgres container
+	ctx := context.Background()
+
+	// Prepare container
 	c := postgres.NewContainer(postgres.Params{
 		Port:     Port,
 		User:     User,
@@ -31,7 +33,7 @@ func TestMain(m *testing.M) {
 	})
 
 	// Start container
-	goit.Start(c)
+	goit.Start(ctx, c)
 	dbUrl = c.Url()
 
 	// Run tests
