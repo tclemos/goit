@@ -3,6 +3,8 @@ package goit
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"testing"
 
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
@@ -37,12 +39,17 @@ func StartWithOptions(ctx context.Context, opt Options, containers ...Container)
 	}
 
 	for _, c := range containers {
-		o, err := c.Options()
-		log.Logf("loading container with options: %v", o)
-		handleContainerErr(err, "can't load container")
-
-		r, err := startContainer(ctx, pool, o, opt)
-		handleContainerErr(err, "can't start container")
+		var r *dockertest.Resource
+		switch cf := c.(type) {
+		case containerFromDockerFile:
+			r, err = startContainerFromDockerFile(ctx, pool, cf, opt)
+			handleContainerErr(err, "can't start container")
+		case containerFromRepository:
+			r, err = startContainerFromRepository(ctx, pool, cf, opt)
+			handleContainerErr(err, "can't start container")
+		default:
+			panic("unknown container type")
+		}
 
 		log.Logf("executing AfterStart for container: %s", r.Container.Name)
 		err = c.AfterStart(ctx, r)
@@ -65,14 +72,32 @@ func Stop() {
 	}
 }
 
+func Run(m *testing.M) int {
+	defer func() {
+		err := recover()
+		if recover() != nil {
+			Stop()
+		}
+		if err != nil {
+			panic(fmt.Sprintf("rethrowing panic after Stoping containers, err: %v", err))
+		}
+	}()
+	return m.Run()
+}
+
 // startContainer creates and initializes a container accordingly to the provided options
-func startContainer(ctx context.Context, p *dockertest.Pool, ropt *dockertest.RunOptions, opt Options) (*dockertest.Resource, error) {
-	log.Logf("starting container: %s", ropt.Name)
-	r, err := p.RunWithOptions(ropt, func(config *docker.HostConfig) {
-		// set AutoRemove to true so that stopped container goes away by itself
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{Name: "no"}
-	})
+func startContainerFromDockerFile(ctx context.Context, p *dockertest.Pool, c containerFromDockerFile, opt Options) (*dockertest.Resource, error) {
+	log.Logf("starting new container")
+	dir, file := filepath.Split(c.DockerFilePath())
+	r, err := p.BuildAndRunWithBuildOptions(&dockertest.BuildOptions{
+		ContextDir: dir,
+		Dockerfile: file,
+		BuildArgs:  c.BuildArgs(),
+	}, &dockertest.RunOptions{
+		Name:         c.ContainerName(),
+		Env:          []string{},
+		PortBindings: c.PortBindings(),
+	}, hostConfig)
 	if err != nil {
 		log.Error(err, "failed to start container, check if docker is running and exposing deamon on tcp://localhost:2375")
 		return nil, err
@@ -80,12 +105,43 @@ func startContainer(ctx context.Context, p *dockertest.Pool, ropt *dockertest.Ru
 
 	err = r.Expire(opt.ExpireContainersAfterSeconds)
 	if err != nil {
-		log.Errorf(err, "could not setup container to expire: %s", ropt.Name)
+		log.Errorf(err, "could not setup container to expire: %s", r.Container.Name)
 		return nil, err
 	}
 
-	log.Logf("container started: %s", ropt.Name)
+	log.Logf("container started: %s", r.Container.Name)
 	return r, nil
+}
+
+// startContainerFromRepository creates and initializes a container accordingly to the provided options
+func startContainerFromRepository(ctx context.Context, p *dockertest.Pool, c containerFromRepository, opt Options) (*dockertest.Resource, error) {
+
+	log.Logf("starting new container")
+
+	o, err := c.Options()
+	log.Logf("loading container with options: %v", o)
+	handleContainerErr(err, "can't load container")
+
+	r, err := p.RunWithOptions(o, hostConfig)
+	if err != nil {
+		log.Error(err, "failed to start container, check if docker is running and exposing deamon on tcp://localhost:2375")
+		return nil, err
+	}
+
+	err = r.Expire(opt.ExpireContainersAfterSeconds)
+	if err != nil {
+		log.Errorf(err, "could not setup container to expire: %s", r.Container.Name)
+		return nil, err
+	}
+
+	log.Logf("container started: %s", r.Container.Name)
+	return r, nil
+}
+
+func hostConfig(config *docker.HostConfig) {
+	// set AutoRemove to true so that stopped container goes away by itself
+	config.AutoRemove = true
+	config.RestartPolicy = docker.RestartPolicy{Name: "no"}
 }
 
 func handleContainerErr(err error, m string, args ...interface{}) {

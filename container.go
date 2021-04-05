@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/ory/dockertest/v3"
+	"github.com/ory/dockertest/v3/docker"
 )
 
 // We need these public variables to share information betwee
@@ -16,12 +17,37 @@ var (
 
 // Container represents a docker container
 type Container interface {
-	// Options to execute the container
-	Options() (*dockertest.RunOptions, error)
 
 	// Executed after the container is started, use it to run migrations
 	// copy files, etc
 	AfterStart(context.Context, *dockertest.Resource) error
+}
+
+// ContainerFromRepository represents a docker container that will be
+// created based on an docker image from a docker repository
+type containerFromRepository interface {
+	Container
+
+	// Options to execute the container
+	Options() (*dockertest.RunOptions, error)
+}
+
+// ContainerFromDockerFile represents a docker container that will be
+// created based on a dockerfile
+type containerFromDockerFile interface {
+	Container
+
+	// The Name of the container
+	ContainerName() string
+
+	// Path of the dockerfile on disk
+	DockerFilePath() string
+
+	// Arguments used during the build phase
+	BuildArgs() []docker.BuildArg
+
+	// Port Bindings for the container
+	PortBindings() map[docker.Port][]docker.PortBinding
 }
 
 type ContainerParams struct {
