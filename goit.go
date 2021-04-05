@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ory/dockertest/v3"
+	"github.com/ory/dockertest/v3/docker"
 	"github.com/tclemos/goit/log"
 )
 
@@ -13,8 +14,18 @@ var (
 	resources []*dockertest.Resource
 )
 
-// Start the integration test environment
+type Options struct {
+	ExpireContainersAfterSeconds uint
+}
+
 func Start(ctx context.Context, containers ...Container) {
+	StartWithOptions(ctx, Options{
+		ExpireContainersAfterSeconds: 60,
+	}, containers...)
+}
+
+// Start the integration test environment
+func StartWithOptions(ctx context.Context, opt Options, containers ...Container) {
 	log.Log("initializing containers")
 	resources = []*dockertest.Resource{}
 
@@ -27,10 +38,10 @@ func Start(ctx context.Context, containers ...Container) {
 
 	for _, c := range containers {
 		o, err := c.Options()
-		log.Log("loading container with options: %v", o)
+		log.Logf("loading container with options: %v", o)
 		handleContainerErr(err, "can't load container")
 
-		r, err := startContainer(ctx, pool, o)
+		r, err := startContainer(ctx, pool, o, opt)
 		handleContainerErr(err, "can't start container")
 
 		log.Logf("executing AfterStart for container: %s", r.Container.Name)
@@ -54,9 +65,32 @@ func Stop() {
 	}
 }
 
+// startContainer creates and initializes a container accordingly to the provided options
+func startContainer(ctx context.Context, p *dockertest.Pool, ropt *dockertest.RunOptions, opt Options) (*dockertest.Resource, error) {
+	log.Logf("starting container: %s", ropt.Name)
+	r, err := p.RunWithOptions(ropt, func(config *docker.HostConfig) {
+		// set AutoRemove to true so that stopped container goes away by itself
+		config.AutoRemove = true
+		config.RestartPolicy = docker.RestartPolicy{Name: "no"}
+	})
+	if err != nil {
+		log.Error(err, "failed to start container, check if docker is running and exposing deamon on tcp://localhost:2375")
+		return nil, err
+	}
+
+	err = r.Expire(opt.ExpireContainersAfterSeconds)
+	if err != nil {
+		log.Errorf(err, "could not setup container to expire: %s", ropt.Name)
+		return nil, err
+	}
+
+	log.Logf("container started: %s", ropt.Name)
+	return r, nil
+}
+
 func handleContainerErr(err error, m string, args ...interface{}) {
 	if err != nil {
-		log.Errorf(err, m, args)
+		log.Errorf(err, m, args...)
 		Stop()
 		panic(err)
 	}

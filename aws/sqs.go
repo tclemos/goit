@@ -28,7 +28,7 @@ func (s SqsService) Send(qn string, m *sqs.Message) error {
 		QueueName: &qn,
 	})
 	if err != nil {
-		log.Error(err, "failed to get the queueUrl for queue: %s", qn)
+		log.Errorf(err, "failed to get the queueUrl for queue: %s", qn)
 		return nil
 	}
 
@@ -49,7 +49,7 @@ func (s SqsService) Receive(qn string) ([]*sqs.Message, error) {
 		QueueName: &qn,
 	})
 	if err != nil {
-		log.Error(err, "failed to get the queueUrl for queue: %s", qn)
+		log.Errorf(err, "failed to get the queueUrl for queue: %s", qn)
 		return nil, err
 	}
 

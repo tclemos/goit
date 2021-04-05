@@ -12,6 +12,7 @@ import (
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
 	"github.com/sethvargo/go-retry"
+	"github.com/tclemos/goit"
 	"github.com/tclemos/goit/log"
 
 	// packages required to execute migrations
@@ -25,6 +26,7 @@ const (
 
 // Params needed to start a postgres container
 type Params struct {
+	goit.ContainerParams
 	Port     int
 	User     string
 	Password string
@@ -48,22 +50,23 @@ func NewContainer(p Params) *Container {
 func (c *Container) Options() (*dockertest.RunOptions, error) {
 	strPort := strconv.Itoa(c.params.Port)
 	pb := map[docker.Port][]docker.PortBinding{}
-	pb[docker.Port(fmt.Sprintf("%d/tcp", port))] = []docker.PortBinding{
-		{
-			HostIP:   "0.0.0.0",
-			HostPort: strPort,
-		},
-	}
+	pb[docker.Port(fmt.Sprintf("%d/tcp", port))] = []docker.PortBinding{{
+		HostIP:   "0.0.0.0",
+		HostPort: strPort,
+	}}
+
+	repo, tag := c.params.GetRepoTag("postgres", "latest")
+	env := c.params.MergeEnv([]string{
+		"POSTGRES_DB=" + c.params.Database,
+		"POSTGRES_USER=" + c.params.User,
+		"POSTGRES_PASSWORD=" + c.params.Password,
+		"POSTGRES_HOST_AUTH_METHOD=trust",
+	})
 
 	return &dockertest.RunOptions{
-		Repository: "postgres",
-		Tag:        "13.2-alpine",
-		Env: []string{
-			"POSTGRES_DB=" + c.params.Database,
-			"POSTGRES_USER=" + c.params.User,
-			"POSTGRES_PASSWORD=" + c.params.Password,
-			"POSTGRES_HOST_AUTH_METHOD=trust",
-		},
+		Repository:   repo,
+		Tag:          tag,
+		Env:          env,
 		PortBindings: pb,
 	}, nil
 }

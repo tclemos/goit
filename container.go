@@ -2,10 +2,10 @@ package goit
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
-	"github.com/tclemos/goit/log"
 )
 
 // We need these public variables to share information betwee
@@ -24,25 +24,52 @@ type Container interface {
 	AfterStart(context.Context, *dockertest.Resource) error
 }
 
-// startContainer creates and initializes a container accordingly to the provided options
-func startContainer(ctx context.Context, p *dockertest.Pool, o *dockertest.RunOptions) (*dockertest.Resource, error) {
-	log.Logf("starting container: %s", o.Name)
-	r, err := p.RunWithOptions(o, func(config *docker.HostConfig) {
-		// set AutoRemove to true so that stopped container goes away by itself
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{Name: "no"}
-	})
-	if err != nil {
-		log.Error(err, "failed to start container, check if docker is running and exposing deamon on tcp://localhost:2375")
-		return nil, err
+type ContainerParams struct {
+	Repository string
+	Tag        string
+	Env        []string
+}
+
+func (p ContainerParams) GetRepoTag(defaultRepo, defaultTag string) (repo, tag string) {
+	if strings.TrimSpace(p.Repository) != "" {
+		repo = p.Repository
+	} else {
+		repo = defaultRepo
 	}
 
-	err = r.Expire(60)
-	if err != nil {
-		log.Errorf(err, "could not setup container to expire: %s", o.Name)
-		return nil, err
+	if strings.TrimSpace(p.Tag) != "" {
+		tag = p.Tag
+	} else {
+		tag = defaultTag
 	}
 
-	log.Logf("container started: %s", o.Name)
-	return r, nil
+	return repo, tag
+}
+
+func (p ContainerParams) MergeEnv(env []string) []string {
+	envMap := map[string]string{}
+	getEnvKeyValue := func(s string) (string, string) {
+		parts := strings.Split(s, "=")
+		return parts[0], parts[1]
+	}
+
+	for _, e := range env {
+		k, v := getEnvKeyValue(e)
+		envMap[k] = v
+	}
+
+	for _, e := range p.Env {
+		k, v := getEnvKeyValue(e)
+		envMap[k] = v
+	}
+
+	newEnv := make([]string, len(envMap))
+
+	i := 0
+	for k, v := range envMap {
+		newEnv[i] = fmt.Sprintf("%s=%s", k, v)
+		i++
+	}
+
+	return newEnv
 }

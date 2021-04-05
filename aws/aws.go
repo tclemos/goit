@@ -15,11 +15,12 @@ import (
 	"github.com/ory/dockertest/v3/docker"
 	"github.com/pkg/errors"
 	"github.com/sethvargo/go-retry"
+	"github.com/tclemos/goit"
 	"github.com/tclemos/goit/log"
 )
 
 const (
-	edgePort = 4566
+	port = 4566
 )
 
 type SqsQueue struct {
@@ -28,6 +29,7 @@ type SqsQueue struct {
 
 // Params needed to start a aws container
 type Params struct {
+	goit.ContainerParams
 	Region    string
 	Port      int
 	SqsQueues []SqsQueue
@@ -48,16 +50,23 @@ func NewContainer(p Params) *Container {
 
 // Options to start a localstack container accordingly to the params
 func (c *Container) Options() (*dockertest.RunOptions, error) {
+	strPort := strconv.Itoa(c.params.Port)
 	pb := map[docker.Port][]docker.PortBinding{}
-	pb[docker.Port(fmt.Sprintf("%d/tcp", edgePort))] = []docker.PortBinding{{HostIP: "0.0.0.0", HostPort: strconv.Itoa(edgePort)}}
+	pb[docker.Port(fmt.Sprintf("%d/tcp", port))] = []docker.PortBinding{{
+		HostIP:   "0.0.0.0",
+		HostPort: strPort,
+	}}
+
+	repo, tag := c.params.GetRepoTag("localstack/localstack", "latest")
+	env := c.params.MergeEnv([]string{
+		"SERVICES=sqs",
+		"DATA_DIR=/tmp/localstack/data",
+	})
 
 	return &dockertest.RunOptions{
-		Repository: "localstack/localstack",
-		Tag:        "latest",
-		Env: []string{
-			"SERVICES=sqs",
-			"DATA_DIR=/tmp/localstack/data",
-		},
+		Repository:   repo,
+		Tag:          tag,
+		Env:          env,
 		PortBindings: pb,
 	}, nil
 }
