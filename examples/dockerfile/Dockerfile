@@ -8,6 +8,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o myapp .
 
 FROM alpine:latest
 
+ARG HOST
+ENV MYAPP_HOST=${HOST}
+
 COPY --from=builder /build/myapp /app/
 RUN chmod +x /app/myapp
 EXPOSE 8080

@@ -17,7 +17,8 @@ import (
 )
 
 const (
-	Port = "8080"
+	host = "0.0.0.0"
+	port = "8080"
 )
 
 func TestMain(m *testing.M) {
@@ -25,30 +26,42 @@ func TestMain(m *testing.M) {
 	ctx := context.Background()
 
 	pb := map[docker.Port][]docker.PortBinding{
-		"8080/tcp": {{HostIP: "0.0.0.0", HostPort: Port}},
+		docker.Port(fmt.Sprintf("%s/tcp", port)): {{HostIP: host, HostPort: port}},
 	}
 
 	// Prepare container
 	c := dockerfile.NewContainer(dockerfile.Params{
-		ContainerName:  "myapp",
+		// specify here the container name
+		ContainerName: "myapp",
+
+		// specify here the dockerfile path
 		DockerFilePath: "./Dockerfile",
-		BuildArgs: []docker.BuildArg{
-			{Name: "PORT", Value: Port},
+
+		// use this to specify the arguments the dockerfile requires to work properly
+		BuildArgs: []docker.BuildArg{{
+			Name: "HOST", Value: host,
+		}},
+
+		// use this to set the environment variables for your container
+		Env: map[string]string{
+			"MYAPP_PORT": port,
 		},
+
+		// define the port bindings to open external ports to the host
 		PortBindings: pb,
+
+		// use the AfterStart function to make sure your container is ready for test,
+		// for example, make a request to a known URL of your service to make sure
+		// it's up and running with a retry logic, if it fails, return
+		// an error to stop de test pipeline
 		AfterStart: func(c context.Context, r *dockertest.Resource, m *map[string]interface{}) error {
-			// use this function to make sure your container is ready for test
-			// for example:
-			// - make a request to a known URL of your service to make sure
-			//   it's up and running with a retry logic, if it fails, return
-			//   an error
 
 			b, _ := retry.NewFibonacci(500 * time.Millisecond)
 			b = retry.WithMaxRetries(10, b)
 			b = retry.WithCappedDuration(20*time.Second, b)
 
 			err := retry.Do(c, b, func(ctx context.Context) error {
-				addr := fmt.Sprintf("http://localhost:%s/ping", Port)
+				addr := fmt.Sprintf("http://localhost:%s/ping", port)
 				res, err := http.DefaultClient.Get(addr)
 				if err != nil || res.StatusCode != http.StatusOK {
 					fmt.Println("waiting on application to initialize...")
@@ -79,7 +92,7 @@ func TestMain(m *testing.M) {
 
 func TestFoo(t *testing.T) {
 
-	addr := fmt.Sprintf("http://localhost:%s/foo", Port)
+	addr := fmt.Sprintf("http://localhost:%s/foo", port)
 	res, err := http.DefaultClient.Get(addr)
 	if err != nil || res.StatusCode != http.StatusOK {
 		t.Error("Failed to get foo API")

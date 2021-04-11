@@ -43,6 +43,9 @@ type containerFromDockerFile interface {
 	// Path of the dockerfile on disk
 	DockerFilePath() string
 
+	// Environment variables
+	Env() []string
+
 	// Arguments used during the build phase
 	BuildArgs() []docker.BuildArg
 

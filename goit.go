@@ -17,13 +17,18 @@ var (
 )
 
 type Options struct {
+	// AutoRemoveContainers set the containers to remove itself when finished, e.g. docker run --rm
+	AutoRemoveContainers bool
+
+	// RestartContainers define if a container must restart after it is finished
+	RestartContainers bool
+
+	// ExpireContainersAfterSeconds sets a container to be destroid after an amount of seconds
 	ExpireContainersAfterSeconds uint
 }
 
 func Start(ctx context.Context, containers ...Container) {
-	StartWithOptions(ctx, Options{
-		ExpireContainersAfterSeconds: 60,
-	}, containers...)
+	StartWithOptions(ctx, DefaultOptions(), containers...)
 }
 
 // Start the integration test environment
@@ -85,6 +90,14 @@ func Run(m *testing.M) int {
 	return m.Run()
 }
 
+func DefaultOptions() Options {
+	return Options{
+		AutoRemoveContainers:         true,
+		RestartContainers:            false,
+		ExpireContainersAfterSeconds: 60,
+	}
+}
+
 // startContainer creates and initializes a container accordingly to the provided options
 func startContainerFromDockerFile(ctx context.Context, p *dockertest.Pool, c containerFromDockerFile, opt Options) (*dockertest.Resource, error) {
 	log.Logf("starting new container")
@@ -95,9 +108,9 @@ func startContainerFromDockerFile(ctx context.Context, p *dockertest.Pool, c con
 		BuildArgs:  c.BuildArgs(),
 	}, &dockertest.RunOptions{
 		Name:         c.ContainerName(),
-		Env:          []string{},
+		Env:          c.Env(),
 		PortBindings: c.PortBindings(),
-	}, hostConfig)
+	}, getHostConfig(opt))
 	if err != nil {
 		log.Error(err, "failed to start container, check if docker is running and exposing deamon on tcp://localhost:2375")
 		return nil, err
@@ -122,7 +135,7 @@ func startContainerFromRepository(ctx context.Context, p *dockertest.Pool, c con
 	log.Logf("loading container with options: %v", o)
 	handleContainerErr(err, "can't load container")
 
-	r, err := p.RunWithOptions(o, hostConfig)
+	r, err := p.RunWithOptions(o, getHostConfig(opt))
 	if err != nil {
 		log.Error(err, "failed to start container, check if docker is running and exposing deamon on tcp://localhost:2375")
 		return nil, err
@@ -138,10 +151,18 @@ func startContainerFromRepository(ctx context.Context, p *dockertest.Pool, c con
 	return r, nil
 }
 
-func hostConfig(config *docker.HostConfig) {
-	// set AutoRemove to true so that stopped container goes away by itself
-	config.AutoRemove = true
-	config.RestartPolicy = docker.RestartPolicy{Name: "no"}
+func getHostConfig(opt Options) func(*docker.HostConfig) {
+	var restartPolicyName string
+	if opt.RestartContainers {
+		restartPolicyName = "yes"
+	} else {
+		restartPolicyName = "no"
+	}
+
+	return func(config *docker.HostConfig) {
+		config.AutoRemove = opt.AutoRemoveContainers
+		config.RestartPolicy = docker.RestartPolicy{Name: restartPolicyName}
+	}
 }
 
 func handleContainerErr(err error, m string, args ...interface{}) {

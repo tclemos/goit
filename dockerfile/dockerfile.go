@@ -2,6 +2,7 @@ package dockerfile
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/ory/dockertest/v3"
@@ -16,6 +17,7 @@ const (
 type Params struct {
 	ContainerName  string
 	DockerFilePath string
+	Env            map[string]string
 	BuildArgs      []docker.BuildArg
 	PortBindings   map[docker.Port][]docker.PortBinding
 	AfterStart     func(context.Context, *dockertest.Resource, *map[string]interface{}) error
@@ -44,6 +46,16 @@ func (c *Container) ContainerName() string {
 
 func (c *Container) DockerFilePath() string {
 	return c.params.DockerFilePath
+}
+
+func (c *Container) Env() []string {
+	env := make([]string, 0, len(c.params.Env))
+
+	for k, v := range c.params.Env {
+		env = append(env, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	return env
 }
 
 func (c *Container) BuildArgs() []docker.BuildArg {
