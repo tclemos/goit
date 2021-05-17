@@ -1,11 +1,14 @@
 package goit
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"path/filepath"
 	"testing"
 
+	"github.com/ahmetb/dlog"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
 	"github.com/tclemos/goit/log"
@@ -141,6 +144,8 @@ func startContainerFromRepository(ctx context.Context, p *dockertest.Pool, c con
 		return nil, err
 	}
 
+	redirectLogs(ctx, p, r)
+
 	err = r.Expire(opt.ExpireContainersAfterSeconds)
 	if err != nil {
 		log.Errorf(err, "could not setup container to expire: %s", r.Container.Name)
@@ -163,6 +168,39 @@ func getHostConfig(opt Options) func(*docker.HostConfig) {
 		config.AutoRemove = opt.AutoRemoveContainers
 		config.RestartPolicy = docker.RestartPolicy{Name: restartPolicyName}
 	}
+}
+
+func redirectLogs(ctx context.Context, p *dockertest.Pool, r *dockertest.Resource) {
+
+	var b bytes.Buffer
+	reader := dlog.NewReader(&b)
+	scanner := bufio.NewScanner(reader)
+
+	err := pool.Client.Logs(docker.LogsOptions{
+		Context: ctx,
+
+		Stderr: true,
+		Stdout: true,
+
+		Follow:      true,
+		Timestamps:  true,
+		RawTerminal: true,
+
+		Container: r.Container.ID,
+
+		OutputStream: &b,
+		ErrorStream:  &b,
+	})
+
+	if err != nil {
+		log.Error(err, "failed to attach log for container %s", r.Container.Name)
+	}
+
+	go func(s *bufio.Scanner, n string) {
+		for s.Scan() {
+			log.Logf("[%s]: %s", n, s.Text())
+		}
+	}(scanner, r.Container.Name)
 }
 
 func handleContainerErr(err error, m string, args ...interface{}) {
