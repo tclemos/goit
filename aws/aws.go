@@ -50,7 +50,12 @@ func NewContainer(p Params) *Container {
 
 // Options to start a localstack container accordingly to the params
 func (c *Container) Options() (*dockertest.RunOptions, error) {
-	strPort := strconv.Itoa(c.params.Port)
+	p := c.params.Port
+	if p == 0 {
+		p = port
+	}
+
+	strPort := strconv.Itoa(p)
 	pb := map[docker.Port][]docker.PortBinding{}
 	pb[docker.Port(fmt.Sprintf("%d/tcp", port))] = []docker.PortBinding{{
 		HostIP:   "0.0.0.0",

@@ -9,10 +9,6 @@ import (
 	"github.com/ory/dockertest/v3/docker"
 )
 
-const (
-	port = 5432
-)
-
 // Params needed to start a container from a dockerfile
 type Params struct {
 	ContainerName  string

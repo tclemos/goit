@@ -48,7 +48,12 @@ func NewContainer(p Params) *Container {
 
 // Options to start a postgres container accordingly to the params
 func (c *Container) Options() (*dockertest.RunOptions, error) {
-	strPort := strconv.Itoa(c.params.Port)
+	p := c.params.Port
+	if p == 0 {
+		p = port
+	}
+
+	strPort := strconv.Itoa(p)
 	pb := map[docker.Port][]docker.PortBinding{}
 	pb[docker.Port(fmt.Sprintf("%d/tcp", port))] = []docker.PortBinding{{
 		HostIP:   "0.0.0.0",
@@ -89,11 +94,11 @@ func (c *Container) Url() url.URL {
 	return c.url
 }
 
-func (c *Container) createDBURL(container *dockertest.Resource) url.URL {
+func (c *Container) createDBURL(r *dockertest.Resource) url.URL {
 	// find db host
 	id := fmt.Sprintf("%d/tcp", port)
-	h := container.GetBoundIP(id)
-	p := container.GetPort(id)
+	h := r.GetBoundIP(id)
+	p := r.GetPort(id)
 	host := net.JoinHostPort(h, p)
 
 	// Build the connection URL.

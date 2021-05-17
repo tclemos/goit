@@ -2,7 +2,6 @@ package postgres_test
 
 import (
 	"context"
-	"net/url"
 	"os"
 	"testing"
 
@@ -18,14 +17,14 @@ const (
 	Database = "postgres_database"
 )
 
-var dbUrl url.URL
+var c *postgres.Container
 
 func TestMain(m *testing.M) {
 
 	ctx := context.Background()
 
 	// Prepare container
-	c := postgres.NewContainer(postgres.Params{
+	c = postgres.NewContainer(postgres.Params{
 		Port:     Port,
 		User:     User,
 		Password: Password,
@@ -34,7 +33,6 @@ func TestMain(m *testing.M) {
 
 	// Start container
 	goit.Start(ctx, c)
-	dbUrl = c.Url()
 
 	// Run tests
 	code := m.Run()
@@ -50,8 +48,10 @@ func TestPostgres(t *testing.T) {
 
 	ctx := context.Background()
 
+	url := c.Url()
+
 	// connect to postgres with the url provided by the container
-	conn, err := pgx.Connect(ctx, dbUrl.String())
+	conn, err := pgx.Connect(ctx, url.String())
 	if err != nil {
 		t.Errorf("Unable to connect to database: %v", err)
 		return

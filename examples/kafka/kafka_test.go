@@ -1,4 +1,4 @@
-package sqs_test
+package kafka_test
 
 import (
 	"context"
@@ -6,9 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/tclemos/goit"
-	"github.com/tclemos/goit/aws"
+	"github.com/tclemos/goit/kafka"
 )
 
 const (
@@ -17,23 +16,24 @@ const (
 	QueueName = "example_queue"
 )
 
-var c *aws.Container
+var c *kafka.Container
 
 func TestMain(m *testing.M) {
 
 	ctx := context.Background()
 
 	// Prepare container
-	c = aws.NewContainer(aws.Params{
-		Region: Region,
-		Port:   Port,
-		SqsQueues: []aws.SqsQueue{
-			{Name: QueueName},
+	c = kafka.NewContainer(kafka.Params{
+		Topics: []string{
+			"TopicOne",
+			"TopicTwo",
 		},
 	})
 
 	// Start container
-	goit.Start(ctx, c)
+	opt := goit.DefaultOptions()
+	opt.AutoRemoveContainers = true
+	goit.StartWithOptions(ctx, opt, c)
 
 	// Run tests
 	code := m.Run()
@@ -45,7 +45,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestSqs(t *testing.T) {
+func TestKafka(t *testing.T) {
 
 	type thing struct {
 		Id   int    `json:"id"`
@@ -63,27 +63,16 @@ func TestSqs(t *testing.T) {
 		return
 	}
 
-	body := string(b)
+	c.Producer.Produce("TopicOne", b)
 
-	c.SqsService.Send(QueueName, &sqs.Message{
-		Body: &body,
-	})
-
-	messages, err := c.SqsService.Receive(QueueName)
+	message, err := c.Consumers["TopicOne"].Consume()
 	if err != nil {
 		t.Errorf("Failed to receive messages: %v", err)
 		return
 	}
 
-	count := len(messages)
-	if count != 1 {
-		t.Errorf("Invalid count, expected 1, found: %d", count)
-		return
-	}
-
-	message := messages[0]
 	var th thing
-	if err := json.Unmarshal([]byte(*message.Body), &th); err != nil {
+	if err := json.Unmarshal(message, &th); err != nil {
 		t.Errorf("Failed to unmarshal message body: %v", err)
 		return
 	}
